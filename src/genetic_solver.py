@@ -4,6 +4,7 @@ import networkx as nx
 import numpy as np
 from .individual import Individual
 from Problem import Problem
+import scipy.sparse.csgraph as csgraph
 
 class GeneticSolver:
     def __init__(self, problem: Problem, pop_size=100, generations=100, mutation_rate=0.3, elite_size=2):
@@ -13,8 +14,14 @@ class GeneticSolver:
         self.mutation_rate = mutation_rate
         self.elite_size = elite_size
         
-        # Cache SOLO numerica (Molto più veloce e leggera in RAM)
-        self.dist_cache = dict(nx.all_pairs_dijkstra_path_length(problem.graph, weight='dist'))
+        nodes = list(problem.graph.nodes)
+        adj_mat = nx.to_scipy_sparse_array(problem.graph, nodelist=nodes, weight='dist')
+        dist_matrix = csgraph.shortest_path(adj_mat, method='D', directed=True)
+        
+        self.dist_cache = {
+            u: {v: d for v, d in zip(nodes, row) if not np.isinf(d)}
+            for u, row in zip(nodes, dist_matrix)
+        }
         
         self.cities = list(problem.graph.nodes)
         if 0 in self.cities:
