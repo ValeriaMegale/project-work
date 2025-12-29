@@ -1,7 +1,7 @@
 """
 Benchmark script to test multiple problem instances in parallel
 """
-from s339239 import Problem
+from s343540 import Problem
 from src.solver_framework import genetic_solver, merge_solver, ils_solver
 from src.utils import check_feasibility
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -277,6 +277,6 @@ if __name__ == '__main__':
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
-    # benchmark()      # Uncomment to run benchmark
-    # print_results('benchmark_results.json')
+    benchmark()      # Uncomment to run benchmark
+    print_results('benchmark_results.json')
     # csv_report('benchmark_results.json')  # Uncomment to convert results to CSV

@@ -3,7 +3,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from time import time
 
 from Problem import Problem
-from src.aco_solver import ACOSolver
+
 from src.beta_optimizer import path_optimizer
 from src.genetic_solver import GeneticSolver
 from src.ils_solver import IteratedLocalSearchSolver
@@ -21,7 +21,6 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
     solvers = {
         'Genetic': genetic_solver,
         'Merge': merge_solver,
-        'ACO': aco_solver,
         'ILS': ils_solver,
     }
 
@@ -120,28 +119,6 @@ def merge_solver(problem) -> tuple[list[tuple[int, float]], float]:
 
     return final_path, cost
 
-
-def aco_solver(problem):
-    start_time = time()
-
-    # Adaptive settings based on problem difficulty
-    iterations = 50
-    ants = 25
-
-    if problem.beta > 1.5:
-        iterations = 80
-        ants = 35
-
-    solver = ACOSolver(problem, n_ants=ants, n_iterations=iterations)
-    path, cost = solver.solve()
-    path = optimize_full_path(path, problem)
-    cost = problem.path_cost(path)
-    elapsed = time() - start_time
-    logging.info(f"ACO Solver: ants={ants}, iter={iterations} | "
-                 f"Cost: {cost:.2f} | Steps: {len(path)} | "
-                 f"Time: {elapsed:.2f}s")
-
-    return path, cost
 
 
 def ils_solver(problem):
