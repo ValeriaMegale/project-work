@@ -268,6 +268,27 @@ def csv_report(path: str):
                 
                 f.write(f"{params['n']},{params['alpha']},{params['beta']},{params.get('density', 0.5)},{params['seed']},{best_solver},{best_cost},{time_taken},{improvement},{feasible}\n")
         
+def latex_results():
+    #n,alpha,beta,density,seed,best_solver,best_cost,time,best_improvement,feasible
+    import pandas as pd
+    df = pd.read_csv('benchmark_results.csv')
+
+    df.drop(columns=['seed', 'feasible'], inplace=True)
+    df.rename(columns={
+        'n': 'Num Cities',
+        'alpha': 'Alpha',
+        'beta': 'Beta',
+        'density': 'Density',
+        'best_solver': 'Best Solver',
+        'best_cost': 'Best Cost',
+        'time': 'Time (s)',
+        'best_improvement': 'Improvement (%)'
+    }, inplace=True)
+
+
+
+    with open('benchmark_results.tex', 'w') as f:
+        f.write(df.to_latex(index=False, float_format="%.2f"))
 
 
 if __name__ == '__main__':
@@ -279,4 +300,5 @@ if __name__ == '__main__':
 
     benchmark()      # Uncomment to run benchmark
     print_results('benchmark_results.json')
-    # csv_report('benchmark_results.json')  # Uncomment to convert results to CSV
+    csv_report('benchmark_results.json')  # Uncomment to convert results to CSV
+    latex_results()  # Uncomment to convert CSV results to LaTeX
