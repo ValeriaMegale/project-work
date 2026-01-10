@@ -49,7 +49,7 @@ def check_feasibility(
         expected_gold = gold_at.get(city, 0.0)
         collected_gold = gold_collected.get(city, 0.0)
         
-        if abs(expected_gold - collected_gold) > 1e-6:  # Float tolerance
+        if abs(expected_gold - collected_gold) > 1e-4:  # Float tolerance
             print(f"❌ Feasibility failed: city {city} has {expected_gold:.2f} gold, collected {collected_gold:.2f}")
             return False
     

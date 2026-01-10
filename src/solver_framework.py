@@ -1,5 +1,6 @@
 import logging
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, as_completed, ThreadPoolExecutor
 from time import time
 
 from Problem import Problem
@@ -14,7 +15,7 @@ from src.utils import optimize_full_path
 
 def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
     """
-    Multithreaded solver that runs multiple strategies in parallel and selects the best solution.
+    Multiprocess solver that runs multiple strategies in parallel and selects the best solution.
     """
 
     # Dictionary of available solvers - easily extensible for future solvers
@@ -26,7 +27,8 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
 
     # Run all solvers in parallel
     results = {}
-    with ProcessPoolExecutor(max_workers=len(solvers)) as executor:
+
+    with ProcessPoolExecutor(max_workers=min(multiprocessing.cpu_count(), len(solvers))) as executor:
         futures = {executor.submit(solver_func, problem): name
                    for name, solver_func in solvers.items()}
 
@@ -41,11 +43,21 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
          results.items()])
     logging.debug(f"All solver costs: {costs_summary}")
 
-    # Select best solution
-    best_solver = min(results.items(), key=lambda x: x[1][1])
-    best_name, (best_path, best_cost) = best_solver
+    # Select best solution (only feasible ones)
+    # Should not happen that no solver finds a feasible solution, but just in case
+    feasible_results = {name: (path, cost) for name, (path, cost) in results.items() 
+                        if check_feasibility(problem, path)}
 
-    logging.info(f"Selected {best_name} solution with cost: {best_cost:.2f}")
+    if feasible_results:
+        best_solver = min(feasible_results.items(), key=lambda x: x[1][1])
+        best_name, (best_path, best_cost) = best_solver
+        logging.info(f"Selected {best_name} solution with cost: {best_cost:.2f}")
+    else:
+        # Fallback to best infeasible solution if none are feasible
+        best_solver = min(results.items(), key=lambda x: x[1][1])
+        best_name, (best_path, best_cost) = best_solver
+        logging.warning(f"No feasible solution found. Using best infeasible solution from {best_name} with cost: {best_cost:.2f}")
+
     return best_path, best_cost
 
 
