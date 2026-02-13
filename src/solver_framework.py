@@ -17,13 +17,18 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
     """
     Multiprocess solver that runs multiple strategies in parallel and selects the best solution.
     """
-
-    # Dictionary of available solvers - easily extensible for future solvers
-    solvers = {
-        'Genetic': genetic_solver,
-        'Merge': merge_solver,
-        'ILS': ils_solver,
-    }
+    if problem.graph.number_of_nodes() <= 100:
+        # Dictionary of available solvers - easily extensible for future solvers
+        solvers = {
+            'Genetic': genetic_solver,
+            'Merge': merge_solver,
+            'ILS': ils_solver,
+        }
+    else:
+        # For larger instances, run only the most promising solver
+        solvers = {
+            'Merge': merge_solver,
+        }
 
     # Run all solvers in parallel
     results = {}
