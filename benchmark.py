@@ -13,10 +13,10 @@ from tqdm import tqdm
 def solve_single_instance(params):
     """
     Solve a single problem instance with all available solvers.
-    
+
     Args:
         params: dict with keys 'n', 'alpha', 'beta', 'seed', 'density'
-    
+
     Returns:
         dict with results for each solver
     """
@@ -26,17 +26,17 @@ def solve_single_instance(params):
     )
     n, alpha, beta, seed = params['n'], params['alpha'], params['beta'], params['seed']
     density = params.get('density', 0.5)
-    
+
     # Create problem instance
     problem = Problem(num_cities=n, alpha=alpha, beta=beta, seed=seed, density=density)
-    
+
     # Dictionary of solvers
     solvers = {
         'genetic': genetic_solver,
         'merge': merge_solver,
         'ILS': ils_solver,
     }
-    
+
     # Test each solver
     results = {}
     for solver_name, solver_func in solvers.items():
@@ -44,9 +44,9 @@ def solve_single_instance(params):
             start_time = time()
             path, cost = solver_func(problem)
             elapsed_time = time() - start_time
-            
+
             feasible = check_feasibility(problem, path)
-            
+
             results[solver_name] = {
                 'cost': cost,
                 'time': elapsed_time,
@@ -62,10 +62,10 @@ def solve_single_instance(params):
                 'time': 0,
                 'feasible': False
             }
-    
+
     # Get baseline
     baseline = problem.baseline()
-    
+
     # Calculate improvement for each solver
     for solver_name, solver_result in results.items():
         if solver_result.get('feasible', False) and baseline > 0:
@@ -73,7 +73,7 @@ def solve_single_instance(params):
             solver_result['improvement'] = improvement
         else:
             solver_result['improvement'] = None
-    
+
     # Find best solver
     valid_solvers = {k: v for k, v in results.items() if v.get('feasible', False)}
     if valid_solvers:
@@ -81,7 +81,7 @@ def solve_single_instance(params):
         best_name = best_solver[0]
     else:
         best_name = None
-    
+
     return {
         'params': params,
         'solvers': results,
@@ -93,21 +93,21 @@ def solve_single_instance(params):
 def benchmark_parallel(instances, max_workers=4):
     """
     Run benchmark on multiple instances in parallel.
-    
+
     Args:
         instances: list of dicts with keys 'n', 'alpha', 'beta', 'seed'
         max_workers: number of parallel workers
-    
+
     Returns:
         dict mapping instance params to results
     """
     results = {}
-    
+
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         # Submit all instances
-        futures = {executor.submit(solve_single_instance, params): params 
+        futures = {executor.submit(solve_single_instance, params): params
                    for params in instances}
-        
+
         # Collect results as they complete
         for future in tqdm(as_completed(futures), total=len(futures), desc="Benchmarking"):
             params = futures[future]
@@ -116,11 +116,11 @@ def benchmark_parallel(instances, max_workers=4):
                 # Use string key for JSON serialization
                 key = f"n={params['n']}_alpha={params['alpha']}_beta={params['beta']}_seed={params['seed']}"
                 results[key] = result
-                
+
                 logging.info(f"✓ Completed: {key}")
             except Exception as e:
                 logging.error(f"✗ Failed: {params} - {e}")
-    
+
     return results
 
 
@@ -137,13 +137,13 @@ def generate_test_instances():
     from itertools import product
     from random import randint
     instances = []
-    
+
     # Example: test different combinations
     n_cities = [10, 50, 100, 1000]
     alpha_values = [0.0, 1.0, 2.0, 4.0]
     beta_values = [0.5, 1, 2, 4]
     density_values = [0.2, 0.5, 1.0]
-    
+
     for n, alpha, beta, density in product(n_cities, alpha_values, beta_values, density_values):
         instances.append({
             'n': n,
@@ -152,7 +152,7 @@ def generate_test_instances():
             'density': density,
             'seed': randint(0, 10000)
         })
-    return instances    
+    return instances
 
 
 def benchmark():
@@ -163,19 +163,19 @@ def benchmark():
     print("Generating test instances...")
     instances = generate_test_instances()
     print(f"Total instances to test: {len(instances)}")
-    
+
     # Run benchmark
     print("\nRunning benchmark...")
     start_time = time()
     results = benchmark_parallel(instances, max_workers=8)
     total_time = time() - start_time
-    
+
     print(f"\nBenchmark completed in {total_time:.2f}s")
     print(f"Tested {len(results)} instances")
-    
+
     # Save results
     save_results(results, filename='benchmark_results.json')
-    
+
     # Print summary
     print("\n=== Summary ===")
     for key, result in results.items():
@@ -190,15 +190,15 @@ def benchmark():
 def print_results(path: str):
     """
     Print the results from a benchmark JSON file in a readable format.
-    
+
     :param path: Path to the JSON results file
     :type path: str
     """
     from collections import defaultdict
-    
+
     with open(path, 'r') as f:
         results = json.load(f)
-    
+
     # Count wins for each solver
     wins = defaultdict(int)
     total_instances = 0
@@ -207,22 +207,22 @@ def print_results(path: str):
         params = result['params']
         best_solver = result['best_solver']
         baseline = result['baseline']
-        
+
         print(f"Instance: n={params['n']}, alpha={params['alpha']}, beta={params['beta']}, seed={params['seed']}")
         print(f"  Baseline cost: {baseline:.2f}")
-        
+
         for solver_name, solver_result in result['solvers'].items():
             cost = solver_result.get('cost', float('inf'))
             time_taken = solver_result.get('time', 0)
             feasible = solver_result.get('feasible', False)
             improvement = solver_result.get('improvement')
             status = "✓" if feasible else "✗"
-            
+
             if improvement is not None:
                 print(f"    {solver_name}: cost={cost:.2f}, time={time_taken:.2f}s, improvement={improvement:+.2f}%, feasible={status}")
             else:
                 print(f"    {solver_name}: cost={cost:.2f}, time={time_taken:.2f}s, feasible={status}")
-        
+
         if best_solver:
             best_cost = result['solvers'][best_solver]['cost']
             wins[best_solver] += 1
@@ -232,7 +232,7 @@ def print_results(path: str):
         else:
             total_instances += 1
             print("  No feasible solution found by any solver.\n")
-    
+
     # Print win statistics
     print("\n=== Win Statistics ===")
     if wins:
@@ -265,9 +265,9 @@ def csv_report(path: str):
                 time_taken = best_result['time']
                 improvement = best_result.get('improvement', 0)
                 feasible = best_result.get('feasible', False)
-                
+
                 f.write(f"{params['n']},{params['alpha']},{params['beta']},{params.get('density', 0.5)},{params['seed']},{best_solver},{best_cost},{time_taken},{improvement},{feasible}\n")
-        
+
 def latex_results():
     #n,alpha,beta,density,seed,best_solver,best_cost,time,best_improvement,feasible
     import pandas as pd
@@ -298,7 +298,7 @@ if __name__ == '__main__':
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
-    benchmark()      # Uncomment to run benchmark
+    # benchmark()      # Uncomment to run benchmark
     print_results('benchmark_results.json')
     csv_report('benchmark_results.json')  # Uncomment to convert results to CSV
-    latex_results()  # Uncomment to convert CSV results to LaTeX
+    # latex_results()  # Uncomment to convert CSV results to LaTeX

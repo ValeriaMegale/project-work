@@ -1,6 +1,5 @@
 import logging
 import time
-
 from Problem import Problem
 from src.solver_framework import problem_solver
 
@@ -19,7 +18,7 @@ def solution(problem: Problem) -> list[tuple[int, float]]:
 def compare(problem: Problem) -> tuple[float, float, float]:
     """
     Compare the solution cost with the baseline cost.
-    
+
     Returns:
         tuple: (improvement %, solution_cost, baseline_cost)
     """

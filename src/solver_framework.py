@@ -4,7 +4,6 @@ from concurrent.futures import ProcessPoolExecutor, as_completed, ThreadPoolExec
 from time import time
 
 from Problem import Problem
-
 from src.beta_optimizer import path_optimizer
 from src.genetic_solver import GeneticSolver
 from src.ils_solver import IteratedLocalSearchSolver
@@ -17,17 +16,18 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
     """
     Multiprocess solver that runs multiple strategies in parallel and selects the best solution.
     """
-    if problem.graph.number_of_nodes() <= 100:
-        # Dictionary of available solvers - easily extensible for future solvers
+
+    # Dictionary of available solvers - easily extensible for future solvers
+    if problem.graph.number_of_nodes() < 100:
         solvers = {
             'Genetic': genetic_solver,
             'Merge': merge_solver,
             'ILS': ils_solver,
         }
     else:
-        # For larger instances, run only the most promising solver
+        # For larger instances, skip GA and ILS due to time constraints, focus on faster Merge strategy
         solvers = {
-            'Merge': merge_solver,
+            'Merge': merge_solver
         }
 
     # Run all solvers in parallel
@@ -50,7 +50,7 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
 
     # Select best solution (only feasible ones)
     # Should not happen that no solver finds a feasible solution, but just in case
-    feasible_results = {name: (path, cost) for name, (path, cost) in results.items() 
+    feasible_results = {name: (path, cost) for name, (path, cost) in results.items()
                         if check_feasibility(problem, path)}
 
     if feasible_results:
@@ -61,17 +61,20 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
         # Fallback to best infeasible solution if none are feasible
         best_solver = min(results.items(), key=lambda x: x[1][1])
         best_name, (best_path, best_cost) = best_solver
-        logging.warning(f"No feasible solution found. Using best infeasible solution from {best_name} with cost: {best_cost:.2f}")
+        logging.warning(
+            f"No feasible solution found. Using best infeasible solution from {best_name} with cost: {best_cost:.2f}")
 
     return best_path, best_cost
-
 
 
 def genetic_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
     start_time = time()
 
+    if problem.graph.number_of_nodes() > 100:
+        return [], float('inf')  # Skip GA for larger instances due to time constraints
+
     # GA parameters (can be increased for better results, e.g., pop=200, gen=500)
-    if problem.graph.number_of_nodes() <= 200:
+    if problem.graph.number_of_nodes() <= 100:
         POPULATION_SIZE = 50
         GENERATIONS = 100
         MUTATION_RATE = 0.3
@@ -113,7 +116,7 @@ def genetic_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
 def merge_solver(problem) -> tuple[list[tuple[int, float]], float]:
     """
     Main solver function using the optimized merge strategy.
-    
+
     Returns:
         Final path as a list of (city, gold_picked) tuples.
     """
@@ -137,10 +140,10 @@ def merge_solver(problem) -> tuple[list[tuple[int, float]], float]:
     return final_path, cost
 
 
-
 def ils_solver(problem):
     start_time = time()
-
+    if problem.graph.number_of_nodes() > 100:
+        return [], float('inf')
     max_iter = 150
     max_duration = 24
 
