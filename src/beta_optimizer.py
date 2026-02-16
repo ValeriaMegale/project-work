@@ -104,8 +104,9 @@ if __name__ == "__main__":
     
     new_path = path_optimizer(full_path, prob)
 
-    old_cost = prob.path_cost(full_path)
-    new_cost = prob.path_cost(new_path)
+    from src.utils import path_cost
+    old_cost = path_cost(prob, full_path)
+    new_cost = path_cost(prob, new_path)
 
     print(f"Original cost: {old_cost}")
     print(f"Optimized cost: {new_cost}")

@@ -10,6 +10,7 @@ import json
 import logging
 from tqdm import tqdm
 
+
 def solve_single_instance(params):
     """
     Solve a single problem instance with all available solvers.
@@ -31,11 +32,17 @@ def solve_single_instance(params):
     problem = Problem(num_cities=n, alpha=alpha, beta=beta, seed=seed, density=density)
 
     # Dictionary of solvers
-    solvers = {
-        'genetic': genetic_solver,
-        'merge': merge_solver,
-        'ILS': ils_solver,
-    }
+    if problem.graph.number_of_nodes() <= 100:
+        solvers = {
+            'genetic': genetic_solver,
+            'merge': merge_solver,
+            'ILS': ils_solver,
+        }
+    else:
+        solvers = {
+            'merge': merge_solver,
+            'genetic': genetic_solver,
+        }
 
     # Test each solver
     results = {}
@@ -114,7 +121,7 @@ def benchmark_parallel(instances, max_workers=4):
             try:
                 result = future.result()
                 # Use string key for JSON serialization
-                key = f"n={params['n']}_alpha={params['alpha']}_beta={params['beta']}_seed={params['seed']}"
+                key = f"n={params['n']}_alpha={params['alpha']}_beta={params['beta']}_density={params.get('density', 0.5)}_seed={params['seed']}"
                 results[key] = result
 
                 logging.info(f"✓ Completed: {key}")
@@ -131,7 +138,6 @@ def save_results(results, filename='benchmark_results.json'):
     print(f"Results saved to {filename}")
 
 
-
 def generate_test_instances():
     """Generate a list of test instances"""
     from itertools import product
@@ -139,10 +145,15 @@ def generate_test_instances():
     instances = []
 
     # Example: test different combinations
-    n_cities = [10, 50, 100, 1000]
-    alpha_values = [0.0, 1.0, 2.0, 4.0]
-    beta_values = [0.5, 1, 2, 4]
+    n_cities = [10, 100, 1000]
+    alpha_values = [0.0, 1.0, 2.0]
+    beta_values = [0.5, 1.0, 2.0]
     density_values = [0.2, 0.5, 1.0]
+
+    # n_cities = [1000]
+    # alpha_values = [1.0]
+    # beta_values = [0.5, 1.0, 2.0]
+    # density_values = [0.2, 0.5, 1.0]
 
     for n, alpha, beta, density in product(n_cities, alpha_values, beta_values, density_values):
         instances.append({
@@ -159,7 +170,7 @@ def benchmark():
     """
     Do benchmarking of multiple problem instances and save results to a JSON file.
     """
-        # Generate test instances
+    # Generate test instances
     print("Generating test instances...")
     instances = generate_test_instances()
     print(f"Total instances to test: {len(instances)}")
@@ -167,7 +178,7 @@ def benchmark():
     # Run benchmark
     print("\nRunning benchmark...")
     start_time = time()
-    results = benchmark_parallel(instances, max_workers=8)
+    results = benchmark_parallel(instances, max_workers=3)
     total_time = time() - start_time
 
     print(f"\nBenchmark completed in {total_time:.2f}s")
@@ -183,9 +194,11 @@ def benchmark():
             best = result['solvers'][result['best_solver']]
             improvement = best.get('improvement', 0)
             if improvement is not None:
-                print(f"{key}: {result['best_solver']} won with cost {best['cost']:.2f} ({improvement:+.2f}% vs baseline) in {best['time']:.2f}s")
+                print(
+                    f"{key}: {result['best_solver']} won with cost {best['cost']:.2f} ({improvement:+.2f}% vs baseline) in {best['time']:.2f}s")
             else:
                 print(f"{key}: {result['best_solver']} won with cost {best['cost']:.2f} in {best['time']:.2f}s")
+
 
 def print_results(path: str):
     """
@@ -219,7 +232,8 @@ def print_results(path: str):
             status = "✓" if feasible else "✗"
 
             if improvement is not None:
-                print(f"    {solver_name}: cost={cost:.2f}, time={time_taken:.2f}s, improvement={improvement:+.2f}%, feasible={status}")
+                print(
+                    f"    {solver_name}: cost={cost:.2f}, time={time_taken:.2f}s, improvement={improvement:+.2f}%, feasible={status}")
             else:
                 print(f"    {solver_name}: cost={cost:.2f}, time={time_taken:.2f}s, feasible={status}")
 
@@ -228,7 +242,8 @@ def print_results(path: str):
             wins[best_solver] += 1
             total_instances += 1
             print(f"  Best solver: {best_solver} with cost {best_cost:.2f}\n")
-            file.write(f"Instance: n={params['n']}, alpha={params['alpha']}, beta={params['beta']}, density={params['density']}, seed={params['seed']}, best_solver={best_solver}, best_cost={best_cost:.2f}\n")
+            file.write(
+                f"Instance: n={params['n']}, alpha={params['alpha']}, beta={params['beta']}, density={params['density']}, seed={params['seed']}, best_solver={best_solver}, best_cost={best_cost:.2f}\n")
         else:
             total_instances += 1
             print("  No feasible solution found by any solver.\n")
@@ -244,6 +259,7 @@ def print_results(path: str):
         print("No wins recorded (no feasible solutions found)")
 
     file.close()
+
 
 def csv_report(path: str):
     """
@@ -266,10 +282,12 @@ def csv_report(path: str):
                 improvement = best_result.get('improvement', 0)
                 feasible = best_result.get('feasible', False)
 
-                f.write(f"{params['n']},{params['alpha']},{params['beta']},{params.get('density', 0.5)},{params['seed']},{best_solver},{best_cost},{time_taken},{improvement},{feasible}\n")
+                f.write(
+                    f"{params['n']},{params['alpha']},{params['beta']},{params.get('density', 0.5)},{params['seed']},{best_solver},{best_cost},{time_taken},{improvement},{feasible}\n")
+
 
 def latex_results():
-    #n,alpha,beta,density,seed,best_solver,best_cost,time,best_improvement,feasible
+    # n,alpha,beta,density,seed,best_solver,best_cost,time,best_improvement,feasible
     import pandas as pd
     df = pd.read_csv('benchmark_results.csv')
 
@@ -285,20 +303,22 @@ def latex_results():
         'best_improvement': 'Improvement (%)'
     }, inplace=True)
 
-
-
     with open('benchmark_results.tex', 'w') as f:
         f.write(df.to_latex(index=False, float_format="%.2f"))
 
 
+import sys
+
 if __name__ == '__main__':
+    sys.path.append('..')
+
     # Configure logging
     logging.basicConfig(
         level=logging.WARNING,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
-    # benchmark()      # Uncomment to run benchmark
+    benchmark()  # Uncomment to run benchmark
     print_results('benchmark_results.json')
     csv_report('benchmark_results.json')  # Uncomment to convert results to CSV
     # latex_results()  # Uncomment to convert CSV results to LaTeX

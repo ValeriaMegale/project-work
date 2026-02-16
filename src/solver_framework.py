@@ -8,8 +8,7 @@ from src.beta_optimizer import path_optimizer
 from src.genetic_solver import GeneticSolver
 from src.ils_solver import IteratedLocalSearchSolver
 from src.merge_optimizer import merge_strategy_optimized
-from src.utils import check_feasibility
-from src.utils import optimize_full_path
+from src.utils import check_feasibility, optimize_full_path, path_cost
 
 
 def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
@@ -25,14 +24,16 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
             'ILS': ils_solver,
         }
     else:
-        # For larger instances, skip GA and ILS due to time constraints, focus on faster Merge strategy
+        # For larger instances, use all solvers with adapted parameters
         solvers = {
-            'Merge': merge_solver
+            'Genetic': genetic_solver,
+            'Merge': merge_solver,
         }
 
     # Run all solvers in parallel
     results = {}
 
+    # IF ALREADY USING MULTIPROCESSING IN SOLVERS, CONSIDER USING ThreadPoolExecutor INSTEAD
     with ProcessPoolExecutor(max_workers=min(multiprocessing.cpu_count(), len(solvers))) as executor:
         futures = {executor.submit(solver_func, problem): name
                    for name, solver_func in solvers.items()}
@@ -70,20 +71,29 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
 def genetic_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
     start_time = time()
 
-    if problem.graph.number_of_nodes() > 100:
-        return [], float('inf')  # Skip GA for larger instances due to time constraints
+    n_nodes = problem.graph.number_of_nodes()
 
-    # GA parameters (can be increased for better results, e.g., pop=200, gen=500)
-    if problem.graph.number_of_nodes() <= 100:
+    # GA parameters scaled by instance size
+    if n_nodes > 500:
         POPULATION_SIZE = 50
-        GENERATIONS = 100
+        GENERATIONS = 30
         MUTATION_RATE = 0.3
-        ELITE_SIZE = 10
-    else:
-        POPULATION_SIZE = 10
-        GENERATIONS = 20
+        ELITE_SIZE = 5
+    elif n_nodes > 100:
+        POPULATION_SIZE = 70
+        GENERATIONS = 40
         MUTATION_RATE = 0.3
         ELITE_SIZE = 3
+    elif n_nodes > 50:
+        POPULATION_SIZE = 100
+        GENERATIONS = 50
+        MUTATION_RATE = 0.3
+        ELITE_SIZE = 4
+    else:
+        POPULATION_SIZE = 100
+        GENERATIONS = 100
+        MUTATION_RATE = 0.2
+        ELITE_SIZE = 10
 
     # Initialize and run the solver
     solver = GeneticSolver(
@@ -103,7 +113,7 @@ def genetic_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
     path = [(0, 0.0)] + path  # Ensure depot at start
     # Apply beta-optimization to full genetic path
     optimized_path = optimize_full_path(path, problem)
-    optimized_cost = problem.path_cost(optimized_path)
+    optimized_cost = path_cost(problem, optimized_path)
 
     elapsed_time = time() - start_time
     logging.info(
@@ -130,7 +140,7 @@ def merge_solver(problem) -> tuple[list[tuple[int, float]], float]:
         final_path.extend(trip[:-1])  # Exclude last depot to avoid duplication
     final_path.append((0, 0.0))  # End at depot
 
-    cost = problem.path_cost(final_path)
+    cost = path_cost(problem, final_path)
     elapsed_time = time() - start_time
 
     logging.info(
@@ -141,22 +151,27 @@ def merge_solver(problem) -> tuple[list[tuple[int, float]], float]:
 
 
 def ils_solver(problem):
-    start_time = time()
     if problem.graph.number_of_nodes() > 100:
-        return [], float('inf')
-    max_iter = 150
-    max_duration = 24
+        return [], float('inf')  # Skip ILS for larger instances due to time constraints
+    start_time = time()
+
+    max_iter = 60
+    max_duration = 400
 
     # Heuristic tuning for harder instances (High Beta)
     if problem.beta > 1.5:
-        max_iter = 100
-        max_duration = 35
+        max_iter = 30
+        max_duration = 300
+
+    if problem.graph.number_of_nodes() > 100:
+        max_iter = 20
+        max_duration = 300
 
     solver = IteratedLocalSearchSolver(problem, max_iterations=max_iter, max_time=max_duration)
     path, cost = solver.solve()
 
     path = optimize_full_path(path, problem)
-    cost = problem.path_cost(path)
+    cost = path_cost(problem, path)
     elapsed = time() - start_time
     logging.info(f"ILS Solver: iter={max_iter} | Cost: {cost:.2f} | Steps: {len(path)} | Time: {elapsed:.2f}s")
 

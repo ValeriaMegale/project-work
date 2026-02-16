@@ -4,20 +4,21 @@ from itertools import combinations
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
-    
+
+
 class Problem:
     _graph: nx.Graph
     _alpha: float
     _beta: float
 
     def __init__(
-        self,
-        num_cities: int,
-        *,
-        alpha: float = 1.0,
-        beta: float = 1.0,
-        density: float = 0.5,
-        seed: int = 42,
+            self,
+            num_cities: int,
+            *,
+            alpha: float = 1.0,
+            beta: float = 1.0,
+            density: float = 0.5,
+            seed: int = 42,
     ):
         rng = np.random.default_rng(seed)
         self._alpha = alpha
@@ -49,49 +50,6 @@ class Problem:
     @property
     def beta(self):
         return self._beta
-    
-    def adj_cost(self, src, dest, weight):
-        """
-        Cost to go from src to dest (adjacent nodes) carrying weight
-        
-        :param src: starting city
-        :param dest: destination city
-        :param weight: weight carried
-        """
-        dist = self._graph[src][dest]['dist']
-        return dist + (self._alpha * dist * weight) ** self._beta
-    
-    def path_cost(self, path: list[tuple[int, float]]) -> float:
-        """
-        Calculates the total cost of traversing the given path.
-        Iterates through edges (u -> v) to ensure consistency with the optimizer logic.
-        
-        :param path: Sequence of (city, gold to pick up at city)
-                        Example: [(0, 0), (20, 1000), (0, 0)]
-        :type path: list[tuple[int, float]]
-        """
-        if path[0][0] != 0:
-            path = [(0, 0.0)] + path
-
-        total_cost = 0.0
-        current_weight = 0.0
-
-        # Iterate through each edge in the path
-        for i in range(len(path) - 1):
-            u, gold_u = path[i]
-            v, gold_v = path[i+1]
-
-            # Discharge logic: if we return to the depot (node 0), reset weight
-            if u == 0:
-                current_weight = 0.0
-
-            # Pick up gold at node u
-            current_weight += gold_u
-
-            # Compute cost to go from u to v with current weight
-            total_cost += self.adj_cost(u, v, current_weight)
-
-        return total_cost
 
     def cost(self, path, weight):
         dist = nx.path_weight(self._graph, path, weight='dist')
@@ -100,7 +58,7 @@ class Problem:
     def baseline(self):
         total_cost = 0
         for dest, path in nx.single_source_dijkstra_path(
-            self._graph, source=0, weight='dist'
+                self._graph, source=0, weight='dist'
         ).items():
             cost = 0
             for c1, c2 in zip(path, path[1:]):
@@ -118,4 +76,3 @@ class Problem:
         size = [100] + [self._graph.nodes[n]['gold'] for n in range(1, len(self._graph))]
         color = ['red'] + ['lightblue'] * (len(self._graph) - 1)
         return nx.draw(self._graph, pos, with_labels=True, node_color=color, node_size=size)
-    
