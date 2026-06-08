@@ -33,7 +33,6 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
     # Run all solvers in parallel
     results = {}
 
-    # IF ALREADY USING MULTIPROCESSING IN SOLVERS, CONSIDER USING ThreadPoolExecutor INSTEAD
     with ProcessPoolExecutor(max_workers=min(multiprocessing.cpu_count(), len(solvers))) as executor:
         futures = {executor.submit(solver_func, problem): name
                    for name, solver_func in solvers.items()}
@@ -51,7 +50,7 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
 
     # Select best solution (only feasible ones)
     # Should not happen that no solver finds a feasible solution, but just in case
-    feasible_results = {name: (path, cost) for name, (path, cost) in results.items()
+    feasible_results = {name: (path, cost) for name, (path, cost) in results.items() 
                         if check_feasibility(problem, path)}
 
     if feasible_results:
@@ -62,10 +61,10 @@ def problem_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
         # Fallback to best infeasible solution if none are feasible
         best_solver = min(results.items(), key=lambda x: x[1][1])
         best_name, (best_path, best_cost) = best_solver
-        logging.warning(
-            f"No feasible solution found. Using best infeasible solution from {best_name} with cost: {best_cost:.2f}")
+        logging.warning(f"No feasible solution found. Using best infeasible solution from {best_name} with cost: {best_cost:.2f}")
 
     return best_path, best_cost
+
 
 
 def genetic_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
@@ -94,6 +93,7 @@ def genetic_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
         GENERATIONS = 100
         MUTATION_RATE = 0.2
         ELITE_SIZE = 10
+
 
     # Initialize and run the solver
     solver = GeneticSolver(
@@ -126,7 +126,7 @@ def genetic_solver(problem: Problem) -> tuple[list[tuple[int, float]], float]:
 def merge_solver(problem) -> tuple[list[tuple[int, float]], float]:
     """
     Main solver function using the optimized merge strategy.
-
+    
     Returns:
         Final path as a list of (city, gold_picked) tuples.
     """
@@ -150,7 +150,9 @@ def merge_solver(problem) -> tuple[list[tuple[int, float]], float]:
     return final_path, cost
 
 
+
 def ils_solver(problem):
+
     if problem.graph.number_of_nodes() > 100:
         return [], float('inf')  # Skip ILS for larger instances due to time constraints
     start_time = time()
