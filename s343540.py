@@ -2,29 +2,23 @@ import logging
 import multiprocessing
 import time
 from Problem import Problem
-from src.solver_framework import problem_solver
-
+from src.merge_optimizer import merge_solver
 
 def solution(problem: Problem) -> list[tuple[int, float]]:
     """
-    Solve the problem using multiple solvers and select the best solution.
+    Risolve il problema ed estrae il percorso ottimale completo.
     """
     multiprocessing.freeze_support()
-    path, cost = problem_solver(problem)
-    if path[0][0] == 0:
-        path = path[1:]
-    return path
+    path, cost = merge_solver(problem)
+    return path  # <- Mantiene il percorso intatto partendo da (0,0)
 
 
 def compare(problem: Problem) -> tuple[float, float, float]:
     """
-    Compare the solution cost with the baseline cost.
-
-    Returns:
-        tuple: (improvement %, solution_cost, baseline_cost)
+    Confronta il costo della soluzione euristica con il baseline di Dijkstra.
     """
     baseline_cost = problem.baseline()
-    _, solution_cost = problem_solver(problem)
+    _, solution_cost = merge_solver(problem)
     improvement = (baseline_cost - solution_cost) / baseline_cost * 100
     return (improvement, solution_cost, baseline_cost)
 
@@ -33,7 +27,7 @@ if __name__ == "__main__":
     multiprocessing.freeze_support()
     logging.basicConfig(level=logging.INFO)
     out = open("results.txt", "w")
-    # Possible values: num_cities: 100, 1_000; density: 0.2, 1; alpha: 1, 2; beta: 1, 2
+
     for num_cities in [100, 1000]:
         for density in [0.2, 1]:
             for beta in [1, 2]:

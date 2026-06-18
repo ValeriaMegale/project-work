@@ -1,199 +1,213 @@
 import networkx as nx
-import math
-from typing import List, Tuple, Dict
-from time import time
-import logging
-from Problem import Problem
-
-def get_return_path_optimized(G: nx.Graph, start_node: int, current_weight: float, alpha: float, beta: float) -> Tuple[float, List[int]]:
-    """
-    Finds the optimal weighted path back to depot (node 0) using A* search.
-    
-    Args:
-        G: The graph
-        start_node: Current location
-        current_weight: Gold currently carried
-        alpha, beta: Problem parameters for cost calculation
-    
-    Returns:
-        (total_cost, path_nodes)
-    """
-    target_node = 0
-    target_pos = G.nodes[target_node]['pos']
-
-    def heuristic(u, v):
-        # Euclidean distance lower bound for weighted travel cost
-        u_pos = G.nodes[u]['pos']
-        dist_geom = math.dist(u_pos, target_pos)
-        return dist_geom + (dist_geom * alpha * current_weight) ** beta
-
-    def weight_fn(u, v, d):
-        # Actual edge cost with weight penalty
-        dist_edge = d['dist']
-        return dist_edge + (dist_edge * alpha * current_weight) ** beta
-
-    try:
-        path = nx.astar_path(G, source=start_node, target=target_node, 
-                            heuristic=heuristic, weight=weight_fn)
-        
-        # Calculate total path cost
-        cost = sum(weight_fn(path[i], path[i+1], G[path[i]][path[i+1]]) 
-                   for i in range(len(path) - 1))
-        return cost, path
-        
-    except nx.NetworkXNoPath:
-        return float('inf'), []
+import numpy as np
+import random
+import time
 
 
-def single_paths(problem: Problem, src=0) -> Dict[int, dict]:
-    """
-    Computes optimal single-city round trips (depot -> city -> depot).
-    Each trip picks up gold at one city only.
-    
-    Returns:
-        Dictionary mapping city_id to trip info (path, cost, gold)
-    """
+def _core_heuristic_optimization(problem, max_iterations=60, time_lim=25.0, k_neighbors=12, random_seed=42):
+    random.seed(random_seed)
     G = problem.graph
-    alpha = problem._alpha
-    beta = problem._beta
-    gold_at = nx.get_node_attributes(G, "gold")
-    
-    # Compute shortest outbound paths (unweighted) from depot
-    dist_out, paths_out = nx.single_source_dijkstra(G, source=src, weight='dist')
-    
-    single_solutions = {}
-    cnt = 0
-    total_cities = len(gold_at)
+    t_start = time.time()
 
-    for dst, gold in gold_at.items():
-        if cnt % 100 == 0:
-            logging.debug(f"[single_paths] Processing city {cnt}/{total_cities}", end='\r')
-        cnt += 1
-        
-        if dst == src or gold <= 0:
+    alpha_val, beta_val = problem._alpha, problem._beta
+
+    valid_nodes = [node for node in G.nodes if node != 0]
+    num_nodes = len(valid_nodes)
+
+    node_to_id = {node: idx for idx, node in enumerate(valid_nodes)}
+    id_to_node = {idx: node for idx, node in enumerate(valid_nodes)}
+    depot_index = num_nodes
+
+    distance_matrix = np.full((num_nodes + 1, num_nodes + 1), np.inf, dtype=np.float32)
+    temp_mapping = node_to_id.copy()
+    temp_mapping[0] = depot_index
+
+    for source, path_lengths in nx.all_pairs_dijkstra_path_length(G, weight="dist"):
+        if source not in temp_mapping:
             continue
-            
-        path_go = paths_out[dst]
-        
-        # Find optimal return path with weight using A*
-        cost_ret, path_ret = get_return_path_optimized(G, dst, gold, alpha, beta)
-        
-        # Build full round trip: go empty, pick up gold, return weighted
-        full_path = [(n, 0.0) for n in path_go[:-1]]
-        full_path.append((dst, gold))
-        full_path.extend([(n, 0.0) for n in path_ret[1:]])
-        
-        total_cost = dist_out[dst] + cost_ret
+        src_idx = temp_mapping[source]
+        for target, dist_val in path_lengths.items():
+            if target in temp_mapping:
+                distance_matrix[src_idx, temp_mapping[target]] = dist_val
 
-        single_solutions[dst] = {
-            'gold_picked': {dst},
-            'current_weight': gold,
-            'path': full_path,
-            'cost': total_cost,
-            'original_single_cost': total_cost
-        }
-        
-    logging.debug(f"[single_paths] Processing complete.")
-    return single_solutions
+    gold_attr = nx.get_node_attributes(G, "gold")
+    gold_array = np.array([gold_attr[id_to_node[i]] for i in range(num_nodes)])
 
+    def evaluate_trip_cost(sequence):
+        total_weight_cost = 0.0
+        accumulated_gold = 0.0
+        curr_pos = depot_index
 
-def fast_cost_calc(distances_cache: List[float], start_idx: int, current_weight: float, alpha: float, beta: float) -> float:
-    """
-    Efficiently calculates path cost from start_idx to end using pre-cached distances.
-    """
-    cost = 0.0
-    
-    for i in range(start_idx, len(distances_cache)):
-        dist = distances_cache[i]
-        if current_weight > 0:
-            cost += dist + pow(dist * alpha * current_weight, beta)
-        else:
-            cost += dist
-    return cost
+        for step in sequence:
+            distance = distance_matrix[curr_pos, step]
+            total_weight_cost += distance + (distance * alpha_val * accumulated_gold) ** beta_val
+            accumulated_gold += gold_array[step]
+            curr_pos = step
 
+        dist_home = distance_matrix[curr_pos, depot_index]
+        total_weight_cost += dist_home + (dist_home * alpha_val * accumulated_gold) ** beta_val
+        return total_weight_cost
 
-def merge_strategy_optimized(problem: Problem) -> List[List[Tuple[int, float]]]:
-    """
-    Merge strategy: combines multiple cities into single trips when profitable.
-    
-    Algorithm:
-    1. Generate all single-city round trips
-    2. Sort by path length (longest first)
-    3. For each main trip, try merging other cities that lie on the return path
-    4. Merge if marginal cost < standalone cost of candidate city
-    
-    Returns:
-        List of trips, where each trip is [(city, gold_picked), ...]
-    """
-    G = problem.graph
-    alpha = problem._alpha
-    beta = problem._beta
-    
-    start_time = time()
-    paths_info = single_paths(problem)
-    end_time = time()
-    logging.debug(f"[merge_strategy_optimized] single_paths computed in {end_time - start_time:.2f} seconds.")
-    
-    excluded_cities = set()  # Cities already merged into other trips
-    
-    # Process longer trips first (more opportunities for merging)
-    sorted_destinations = sorted(paths_info.keys(), 
-                               key=lambda k: len(paths_info[k]['path']), 
-                               reverse=True)
-    
-    final_solution_paths = []
+    active_trips = {i: [i] for i in range(num_nodes)}
+    trip_costs = {i: evaluate_trip_cost([i]) for i in range(num_nodes)}
+    node_ownership = {i: i for i in range(num_nodes)}
 
-    start_time = time()
-    for main_dst in sorted_destinations:
-        if main_dst in excluded_cities:
-            continue
+    candidate_peers = {}
+    for i in range(num_nodes):
+        sorted_closest = np.argsort(distance_matrix[i, :num_nodes])[1:k_neighbors]
+        candidate_peers[i] = list(sorted_closest)
+        random.shuffle(candidate_peers[i])
 
-        excluded_cities.add(main_dst)
+    has_improved = True
+    loop_counter = 0
 
-        current_data = paths_info[main_dst]
-        full_path = current_data['path']
-        
-        # Pre-cache edge distances for fast cost recalculation
-        path_distances = [G[full_path[k][0]][full_path[k+1][0]]['dist'] 
-                         for k in range(len(full_path) - 1)]
-            
-        current_vehicle_weight = current_data['current_weight']
-        last_pick_idx = max(i for i, (_, g) in enumerate(full_path) if g > 0)
-        
-        # Find cities on return path that could be merged
-        candidate_indices = []
-        for i in range(last_pick_idx + 1, len(full_path) - 1):
-            city = full_path[i][0]
-            if city in paths_info and city not in excluded_cities and city != main_dst:
-                candidate_indices.append(i)
-        
-        # Try merging each candidate
-        for i in candidate_indices:
-            candidate_city = full_path[i][0]
-            if candidate_city in excluded_cities:
+    while has_improved and loop_counter < max_iterations and (time.time() - t_start) < time_lim:
+        has_improved = False
+        loop_counter += 1
+
+        max_savings = 1e-5
+        optimal_move = None
+
+        for trip_id_a in list(active_trips.keys()):
+            if trip_id_a not in active_trips:
                 continue
 
-            cost_candidate_solo = paths_info[candidate_city]['original_single_cost']
-            gold_candidate = paths_info[candidate_city]['current_weight']
-            
-            new_weight = current_vehicle_weight + gold_candidate
-            
-            # Compare cost of returning with extra gold vs current weight
-            cost_return_heavy = fast_cost_calc(path_distances, i, new_weight, alpha, beta)
-            cost_return_light = fast_cost_calc(path_distances, i, current_vehicle_weight, alpha, beta)
-            
-            marginal_cost = cost_return_heavy - cost_return_light
-            
-            # Merge if cheaper than doing candidate city separately
-            if marginal_cost < cost_candidate_solo:
-                full_path[i] = (candidate_city, gold_candidate)
-                current_vehicle_weight += gold_candidate
-                excluded_cities.add(candidate_city)
+            path_a = active_trips[trip_id_a]
+            tail_node = path_a[-1]
 
-        final_solution_paths.append(full_path)
-        
-    end_time = time()
-    logging.debug(f"[merge_strategy_optimized] Merging completed in {end_time - start_time:.2f} seconds.")
-             
-    return final_solution_paths
+            for peer in candidate_peers[tail_node]:
+                trip_id_b = node_ownership[peer]
 
+                if trip_id_a == trip_id_b or trip_id_b not in active_trips:
+                    continue
+
+                path_b = active_trips[trip_id_b]
+                if path_b[0] != peer:
+                    continue
+
+                real_a = id_to_node[tail_node]
+                real_b = id_to_node[peer]
+
+                if not G.has_edge(real_a, real_b):
+                    continue
+
+                len_limit = 2 + int(beta_val // 1.5)
+                if beta_val < 2:
+                    len_limit += 1
+
+                if len(path_a) + len(path_b) > len_limit:
+                    continue
+
+                combined_seq = path_a + path_b
+                is_valid_sequence = all(
+                    G.has_edge(id_to_node[u], id_to_node[v])
+                    for u, v in zip(combined_seq, combined_seq[1:])
+                )
+
+                if not is_valid_sequence:
+                    continue
+
+                updated_cost = evaluate_trip_cost(combined_seq)
+                previous_cost = trip_costs[trip_id_a] + trip_costs[trip_id_b]
+                savings = previous_cost - updated_cost
+
+                noise_limit = 1e-5 * previous_cost * (1 + 0.2 * random.random())
+
+                if savings > max_savings and savings > noise_limit:
+                    max_savings = savings
+                    optimal_move = (trip_id_a, trip_id_b, combined_seq, updated_cost)
+
+        if optimal_move:
+            t_a, t_b, new_seq, updated_c = optimal_move
+            active_trips[t_a] = new_seq
+            trip_costs[t_a] = updated_c
+
+            for n in active_trips[t_b]:
+                node_ownership[n] = t_a
+
+            del active_trips[t_b]
+            del trip_costs[t_b]
+            has_improved = True
+
+    global_path = []
+    sorted_trips = sorted(active_trips.keys(), key=lambda r: trip_costs[r], reverse=True)
+
+    for t_id in sorted_trips:
+        seq = active_trips[t_id]
+        if not seq:
+            continue
+
+        curr_pos = 0
+        sub_path = [(0, 0)]
+
+        for idx in seq:
+            real_node = id_to_node[idx]
+
+            if sub_path[-1][0] == real_node:
+                continue
+
+            if not G.has_edge(curr_pos, real_node):
+                if sub_path[-1][0] != 0:
+                    sub_path.append((0, 0))
+                curr_pos = 0
+                continue
+
+            sub_path.append((real_node, gold_attr[real_node]))
+            curr_pos = real_node
+
+        if sub_path[-1][0] != 0:
+            sub_path.append((0, 0))
+
+        if global_path and global_path[-1][0] == 0 and sub_path[0][0] == 0:
+            sub_path = sub_path[1:]
+
+        global_path.extend(sub_path)
+
+    sanitized_path = [(0, 0)]
+    for node_id, gold_val in global_path[1:]:
+        prev_node = sanitized_path[-1][0]
+        if node_id != prev_node and G.has_edge(prev_node, node_id):
+            sanitized_path.append((node_id, gold_val))
+        elif node_id == 0:
+            sanitized_path.append((0, 0))
+
+    return sanitized_path
+
+
+def merge_solver(problem, max_iter=60, time_limit=25.0, neighbor_count=12, seed=42) -> tuple[
+    list[tuple[int, float]], float]:
+    final_path = _core_heuristic_optimization(
+        problem,
+        max_iterations=max_iter,
+        time_lim=time_limit,
+        k_neighbors=neighbor_count,
+        random_seed=seed
+    )
+
+    cost = 0.0
+    current_gold = 0.0
+    alpha_val, beta_val = problem._alpha, problem._beta
+    graph = problem.graph
+
+    # -----------------------------------------------------
+    # CALCOLO LOG INTERNO ALLINEATO ALLA VALUTAZIONE
+    # Usa shortest_path per gestire i "salti", eliminando il KeyError
+    # ma senza toccare il percorso reale!
+    # -----------------------------------------------------
+    for i in range(len(final_path) - 1):
+        u = final_path[i][0]
+        v = final_path[i + 1][0]
+        current_gold += final_path[i][1]
+
+        try:
+            sp = nx.shortest_path(graph, u, v, weight="dist")
+            d = nx.path_weight(graph, sp, weight="dist")
+        except nx.NetworkXNoPath:
+            d = float("inf")
+
+        cost += d + (d * alpha_val * current_gold) ** beta_val
+
+        if v == 0:
+            current_gold = 0.0
+
+    return final_path, cost
