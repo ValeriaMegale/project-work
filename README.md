@@ -19,7 +19,7 @@ gold, minimise total travel cost.
 
 ## Solution: genetic algorithm + beta optimizer
 
-`s339239.solution(problem)` returns a feasible path — a list of `(city, gold)`
+`s343540.solution(problem)` returns a feasible path — a list of `(city, gold)`
 steps. Internally (`src/solver_framework.problem_solver`):
 
 1. a genetic algorithm evolves the **order** in which cities are visited;
@@ -166,7 +166,7 @@ always improves cost when $\beta > 1$.
 pip install -r requirements.txt
 
 # solve one instance and compare to the baseline
-python -c "from Problem import Problem; from s339239 import compare; print(compare(Problem(100, density=0.2, alpha=1, beta=2)))"
+python -c "from Problem import Problem; from s343540 import compare; print(compare(Problem(100, density=0.2, alpha=1, beta=2)))"
 
 pytest        # parity / feasibility tests
 ```

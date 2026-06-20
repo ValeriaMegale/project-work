@@ -2,7 +2,7 @@
 
 Drives the `goldcollector` genetic-algorithm solver and applies the beta
 optimizer (`src/beta_optimizer.py`) for super-linear penalties. Exposes the
-`problem_solver(problem) -> (path, cost)` contract that `s339239.py` relies on.
+`problem_solver(problem) -> (path, cost)` contract that `s343540.py` relies on.
 """
 
 import logging
